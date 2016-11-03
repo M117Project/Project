@@ -9,6 +9,7 @@
 import UIKit
 import MapKit
 import CoreLocation
+import Parse
 
 class MapViewController: UIViewController, MKMapViewDelegate, UITextFieldDelegate, CLLocationManagerDelegate {
     
@@ -35,7 +36,7 @@ class MapViewController: UIViewController, MKMapViewDelegate, UITextFieldDelegat
         
         return pinView
     }
-    
+ 
     
     @IBOutlet var map: MKMapView!
     
@@ -117,17 +118,80 @@ class MapViewController: UIViewController, MKMapViewDelegate, UITextFieldDelegat
         }
     }
     
-    //TODO: Implement this
-    func sendMessage() {
-        addToMap();
+    func addToMap(object: PFObject) {
+        let annotation = MKPointAnnotation()
+        annotation.coordinate = CLLocationCoordinate2D(latitude: object["Latitude"] as! CLLocationDegrees, longitude: object["Longitude"] as! CLLocationDegrees)
+        annotation.title = object["Message"] as! String
+        
+        map.addAnnotation(annotation)
     }
     
+    func refreshMessages(){
+        var receivedMessages = [PFObject]()
+        let query = PFQuery(className: "Messages")
+        query.findObjectsInBackground { (objects, error) -> Void in
+            if objects != nil {
+                
+                for object in objects! as [PFObject] {
+                    
+                    if self.userLocation.distance(from: CLLocation(latitude: object["Latitude"] as! CLLocationDegrees, longitude: object["Longitude"] as! CLLocationDegrees)) <= 10.0  {
+                        
+                        receivedMessages.append(object)
+                        self.addToMap(object: object)
+                    }
+                    
+                }
+                
+                
+            } else {
+                
+                if error != nil {
+                    
+                    print (error)
+                    
+                } else {
+                    
+                    print ("Error!")
+                    
+                }
+            }
+        }
+        
+        //return receivedMessages
+    }
     
-    /////////////////////////////////
-    //Region: Location Services
-    /////////////////////////////////
-    var locationManager = CLLocationManager()
+    func sendMessage() {
+        let newMessage = PFObject(className: "Messages")
+        newMessage["Message"] = o_tf_msgTextField.text!
+        newMessage["Latitude"] = userLocation.coordinate.latitude
+        newMessage["Longitude"] = userLocation.coordinate.longitude
+        newMessage.saveInBackground { (success, error) -> Void in
+            if success {
+                
+                print("Object has been saved.")
+                
+            } else {
+                
+                if error != nil {
+                    
+                    print (error)
+                    
+                } else {
+                    
+                    print ("Error")
+                }
+                
+            }
+        }
+        //addToMap();
+        refreshMessages()
+        /*if TestMessages.count > 0 {
+            o_tf_msgTextField.text = TestMessages[0]["Message"] as! String + " Received!"
+        }*/
+    }
+
     
+    var refreshTimer : Timer = Timer();
     override func viewDidLoad() {
         super.viewDidLoad()
         // Do any additional setup after loading the view, typically from a nib.
@@ -141,17 +205,16 @@ class MapViewController: UIViewController, MKMapViewDelegate, UITextFieldDelegat
         locationManager.requestWhenInUseAuthorization()
         locationManager.startUpdatingLocation()
         
-        
-        /* LONG PRESS */
-        /*
-        let uilpgr = UILongPressGestureRecognizer(target: self, action: #selector(MapViewController.longPressAddContent(gestureRecognizer:)))
-        
-        uilpgr.minimumPressDuration = 2
-        
-        map.addGestureRecognizer(uilpgr)
-        */
-        
+        /* SCHEDULE REFRESH */
+        refreshTimer = Timer.scheduledTimer(timeInterval: 0.5, target: self, selector: #selector(refreshMessages), userInfo: nil, repeats: true)
     }
+    
+    
+    /////////////////////////////////
+    //Region: Location Services
+    /////////////////////////////////
+    
+    var locationManager = CLLocationManager()
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         
@@ -178,13 +241,14 @@ class MapViewController: UIViewController, MKMapViewDelegate, UITextFieldDelegat
     }
     
     
-    func addToMap() {
+    /*func addToMap() {
         let annotation = MKPointAnnotation()
         annotation.coordinate = userLocation.coordinate
         annotation.title = o_tf_msgTextField.text!
+        
         o_tf_msgTextField.text = "";
         map.addAnnotation(annotation)
-    }
+    }*/
     
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
